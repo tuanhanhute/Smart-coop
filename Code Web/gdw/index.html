@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/x-icon" href="https://cdn-icons-png.flaticon.com/128/824/824738.png">
+  <title>Hệ thống chuồng nuôi</title>
+  <link rel="stylesheet" href="monitor.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+
+<body>
+  <div id="login_page">
+    <div id="overlay"></div>
+    <div id="log_in">
+      <button>Đăng nhập bằng tài khoản Google</button>
+    </div>
+  </div>
+  <div id="all">
+    <!-- Thêm một div chứa chữ "clock" bên trên đồng hồ -->
+    <div id="clock-container">
+      <div id="real-time-clock"></div>
+      <div class="log">
+        <div id="username"></div>
+      </div>
+
+      <div id="log_out">
+        <button>Đăng xuất</button>
+      </div>
+    </div>
+    <div class="right">
+      <button id="toggle-interaction">User</button>
+    </div>
+
+    <div class="sub-container"> <!--Nhiệt độ-->
+      <div class="device" id="temp_div">
+        <img src="https://t4.ftcdn.net/jpg/00/96/60/63/240_F_96606327_B3aQpioqM5R68TnfEkUzgJnZABX23QG4.jpg"
+          alt="Cảm biến đo nhiệt độ">
+        <h2 id="temp-color">NHIỆT ĐỘ CHUỒNG: <span id="temp"></span>°C</h2>
+
+      </div>
+      <div class="device"> <!--Độ ẩm-->
+        <img
+          src="https://media.istockphoto.com/id/1277328164/vi/vec-to/bi%E1%BB%83u-t%C6%B0%E1%BB%A3ng-%C4%91%E1%BB%99-%E1%BA%A9m.jpg?s=612x612&w=0&k=20&c=fp41jCpNh8E-jdN6IF4QUqEYY00XrvQWkTW3BLjr-mk="
+          alt="Cảm biến đo độ ẩm">
+        <h2 id="hum-color">ĐỘ ẨM CHUỒNG: <span id="humid"></span>%</h2>
+      </div>
+    </div>
+
+    <div class="container"> <!--Quạt-->
+      <div class="sub-container">
+        <div class="device">
+          <h2>QUẠT</h2>
+          <img id="fan" src="https://cdn-icons-png.flaticon.com/512/5324/5324839.png" alt="Quạt">
+          <div>
+            <button id="fan-on">ON</button>
+            <button id="fan-off">OFF</button>
+          </div>
+        </div>
+        <div class="device"> <!--Đèn-->
+          <div>
+            <h2>ĐÈN SƯỞI</h2>
+            <img id="heater" src="https://cdn-icons-png.flaticon.com/512/702/702814.png" alt="Đèn sưởi">
+            <div>
+              <div>
+                <button id="heater-on">ON</button>
+                <button id="heater-off">OFF</button>
+              </div>
+            </div>
+          </div>
+          <div id="Lighting_List"></div>
+        </div>
+
+      </div>
+      <div class="sub-container">
+
+        <div class="device">
+          <div>
+            <h2>CHO ĂN</h2>
+            <button id="Feeding_Timer_Btn">DANH SÁCH HẸN GIỜ</button>
+            <div><img id="State" src="https://cdn-icons-png.flaticon.com/128/7128/7128634.png" alt="chicken"></div>
+            <label for="hour-selector">Hours:</label>
+            <input type="number" id="hour-selector" min="0" max="24">
+            <label for="minute-selector">Minutes:</label>
+            <input type="number" id="minute-selector" min="0" max="59">
+            <button id="set-timer">SET TIMER</button>
+            <button id="open">Feeding</button>
+            <button id="close">Stop</button>
+          </div>
+          <div id="Feeding_List"></div>
+        </div>
+
+        <div class="device">
+          <h2>BƠM NƯỚC</h2>
+          <img id="StatePump" src="https://cdn-icons-png.flaticon.com/128/2372/2372600.png" alt="drink water">
+          <div>
+            <button id="pump-on">ON</button>
+            <button id="pump-off">OFF</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div id="video-stream">
+      <div class="sub-container">
+        <label for="camera-link">Nhập link stream camera: </label>
+        <input id="camera-link" type="url" placeholder="https://...">
+        <button id="submit-link">Nhập</button>
+      </div>
+      <div class="sub-container">
+        <iframe id="camera" width="560" height="315" title="YouTube video player" frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+      </div>
+    </div>
+
+    <div>
+      <div id="log_bar">
+        <button id="save_log">Save</button>
+        <button id="copy_log">Copy</button>
+      </div>
+      <div id="log"></div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+  <script type="module" src="demo.js"></script>
+  <script type="module" src="log_in_out.js"></script>
+</body>
+
+</html>
