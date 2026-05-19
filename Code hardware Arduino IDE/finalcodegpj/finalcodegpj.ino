@@ -8,11 +8,9 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 
+// ================= PIN =================
 const int trigPin = 25;
 const int echoPin = 26;
-const float pumpStartDistance = 4.0;
-
-LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 #define DHTPIN 5
 #define DHTTYPE DHT11
@@ -28,126 +26,241 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 #define BUTTON4_PIN 19
 #define BUTTON5_PIN 33
 
-#define WIFI_SSID "Nha xe C"
-#define WIFI_PASSWORD "88888888"
+// ================= THRESHOLD =================
+const float pumpStartDistance = 4.0;
 
+// ================= DEVICE =================
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+DHT dht(DHTPIN, DHTTYPE);
+Servo servo1;
+
+// ================= FIREBASE =================
 FirebaseConfig config;
 FirebaseAuth auth;
 FirebaseData firebaseData;
 
-DHT dht(DHTPIN, DHTTYPE);
-Servo servo1;
-
-String mode, heater, fan, State, StatePump;
+// ================= STATE =================
+String mode, fan, heater, feeding, pumpState;
 
 int fanState = LOW;
 int heaterState = LOW;
-int StateFeeding = LOW;
-int StatePumping = LOW;
+int feedingState = LOW;
+int pumpStateLocal = LOW;
+
 bool previousPumpState = false;
 
+// ================= DATA STRUCT =================
 typedef struct {
   float temp;
   float humi;
 } DHTData_t;
 
+typedef struct {
+  float distance;
+} WaterData_t;
+
 QueueHandle_t dhtQueue;
+QueueHandle_t waterQueue;
 
-// ================= PUMP FUNCTION =================
-void checkWaterLevelAndPump() {
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
+// ================= LCD UTILS =================
+void lcdPrint(const char* l1, const char* l2) {
+  lcd.setCursor(2, 0);
+  lcd.print("                ");
+  lcd.setCursor(2, 0);
+  lcd.print(l1);
 
-  long duration = pulseIn(echoPin, HIGH);
-  float distanceToWater = duration * 0.034 / 2;
-  bool currentPumpState = distanceToWater > pumpStartDistance;
-
-  if (currentPumpState != previousPumpState) {
-    digitalWrite(PUMP_PIN, currentPumpState ? HIGH : LOW);
-    previousPumpState = currentPumpState;
-  }
+  lcd.setCursor(2, 1);
+  lcd.print("                ");
+  lcd.setCursor(2, 1);
+  lcd.print(l2);
 }
 
-// ================= READ DHT =================
+// ================= TASK DHT =================
 void Task_DHT(void *pv) {
   DHTData_t data;
-  for (;;) {
+
+  while (1) {
     data.humi = dht.readHumidity();
     data.temp = dht.readTemperature();
-    xQueueSend(dhtQueue, &data, portMAX_DELAY);
+
+    xQueueOverwrite(dhtQueue, &data);
+
     vTaskDelay(pdMS_TO_TICKS(2000));
   }
 }
 
-// ================= TASK PUMP WATER =================
-void Task_Pump(void *pv) {
-  for (;;) {
-    checkWaterLevelAndPump();
+// ================= TASK ULTRASONIC =================
+void Task_Ultrasonic(void *pv) {
+  WaterData_t w;
+
+  while (1) {
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(2);
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);
+
+    long duration = pulseIn(echoPin, HIGH);
+    w.distance = duration * 0.034 / 2;
+
+    xQueueOverwrite(waterQueue, &w);
+
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
 
-// ================= MAIN TASK =================
-void Task_Main(void *pv) {
-  DHTData_t sensor;
+// ================= TASK CONTROL (CORE LOGIC) =================
+void Task_Control(void *pv) {
+  DHTData_t dhtData;
+  WaterData_t waterData;
 
-  for (;;) {
-    if (xQueueReceive(dhtQueue, &sensor, portMAX_DELAY)) {
+  while (1) {
 
-      float humidity = sensor.humi;
-      float temperature = sensor.temp;
+    xQueuePeek(dhtQueue, &dhtData, portMAX_DELAY);
+    xQueuePeek(waterQueue, &waterData, portMAX_DELAY);
 
-      Firebase.getString(firebaseData, "/doan1/controller/mode/state");
-      mode = firebaseData.stringData();
+    // ================= READ FIREBASE =================
+    Firebase.getString(firebaseData, "/doan1/controller/mode/state");
+    mode = firebaseData.stringData();
 
-      Firebase.setFloat(firebaseData, "/doan1/controller/humidity", humidity);
-      Firebase.setFloat(firebaseData, "/doan1/controller/temperature", temperature);
+    Firebase.getString(firebaseData, "/doan1/controller/fan/state");
+    fan = firebaseData.stringData();
 
-      if (mode == "auto") {
-        if (temperature > 28) {
-          digitalWrite(FAN_PIN, HIGH);
-          fanState = HIGH;
-        } else {
-          digitalWrite(FAN_PIN, LOW);
-          fanState = LOW;
-        }
+    Firebase.getString(firebaseData, "/doan1/controller/heater/state");
+    heater = firebaseData.stringData();
 
-        if (humidity > 70) {
-          digitalWrite(HEATER_PIN, HIGH);
-          heaterState = HIGH;
-        } else {
-          digitalWrite(HEATER_PIN, LOW);
-          heaterState = LOW;
-        }
+    Firebase.getString(firebaseData, "/doan1/controller/feeding/state");
+    feeding = firebaseData.stringData();
+
+    Firebase.getString(firebaseData, "/doan1/controller/drinking/state");
+    pumpState = firebaseData.stringData();
+
+    Firebase.setFloat(firebaseData, "/doan1/controller/temperature", dhtData.temp);
+    Firebase.setFloat(firebaseData, "/doan1/controller/humidity", dhtData.humi);
+
+    // ================= MODE SWITCH =================
+    if (digitalRead(BUTTON4_PIN) == HIGH) {
+      mode = (mode == "auto") ? "user" : "auto";
+      Firebase.setString(firebaseData, "/doan1/controller/mode/state", mode);
+      vTaskDelay(pdMS_TO_TICKS(300));
+    }
+
+    // ================= AUTO MODE =================
+    if (mode == "auto") {
+
+      // FAN
+      if (dhtData.temp > 28) {
+        digitalWrite(FAN_PIN, HIGH);
+        fanState = HIGH;
+        lcdPrint("Mode: Auto", "FAN: ON");
+      } else {
+        digitalWrite(FAN_PIN, LOW);
+        fanState = LOW;
+        lcdPrint("Mode: Auto", "FAN: OFF");
       }
 
-      if (digitalRead(BUTTON3_PIN) == HIGH) {
-        servo1.write(StateFeeding ? 90 : 0);
-        StateFeeding = !StateFeeding;
+      // HEATER
+      if (dhtData.humi > 70) {
+        digitalWrite(HEATER_PIN, HIGH);
+        heaterState = HIGH;
+        lcdPrint("Mode: Auto", "HEATER: ON");
+      } else {
+        digitalWrite(HEATER_PIN, LOW);
+        heaterState = LOW;
+        lcdPrint("Mode: Auto", "HEATER: OFF");
       }
 
-      if (digitalRead(BUTTON5_PIN) == HIGH) {
-        digitalWrite(PUMP_PIN, StatePumping ? LOW : HIGH);
-        StatePumping = !StatePumping;
+      // FEEDING AUTO
+      if (feeding == "ON" && feedingState == LOW) {
+        servo1.write(0);
+        feedingState = HIGH;
+        lcdPrint("Mode: Auto", "FEEDING: ON");
+      }
+      if (feeding == "OFF" && feedingState == HIGH) {
+        servo1.write(90);
+        feedingState = LOW;
+        lcdPrint("Mode: Auto", "FEEDING: OFF");
+      }
+
+      // PUMP AUTO
+      bool currentPump = waterData.distance > pumpStartDistance;
+
+      if (currentPump != previousPumpState) {
+        digitalWrite(PUMP_PIN, currentPump ? HIGH : LOW);
+        lcdPrint("Mode: Auto", currentPump ? "PUMP: ON" : "PUMP: OFF");
+        previousPumpState = currentPump;
       }
     }
 
-    vTaskDelay(pdMS_TO_TICKS(100));
+    // ================= USER MODE =================
+    else {
+
+      // FAN BUTTON
+      if (digitalRead(BUTTON1_PIN) == HIGH) {
+        fanState = !fanState;
+        digitalWrite(FAN_PIN, fanState);
+        Firebase.setString(firebaseData,
+          "/doan1/controller/fan/state",
+          fanState ? "ON" : "OFF");
+        lcdPrint("Mode: User", fanState ? "FAN: ON" : "FAN: OFF");
+        vTaskDelay(pdMS_TO_TICKS(300));
+      }
+
+      if (fan == "ON") digitalWrite(FAN_PIN, HIGH);
+      if (fan == "OFF") digitalWrite(FAN_PIN, LOW);
+
+      // HEATER BUTTON
+      if (digitalRead(BUTTON2_PIN) == HIGH) {
+        heaterState = !heaterState;
+        digitalWrite(HEATER_PIN, heaterState);
+        Firebase.setString(firebaseData,
+          "/doan1/controller/heater/state",
+          heaterState ? "ON" : "OFF");
+        lcdPrint("Mode: User", heaterState ? "HEATER: ON" : "HEATER: OFF");
+        vTaskDelay(pdMS_TO_TICKS(300));
+      }
+
+      if (heater == "ON") digitalWrite(HEATER_PIN, HIGH);
+      if (heater == "OFF") digitalWrite(HEATER_PIN, LOW);
+
+      // FEEDING BUTTON
+      if (digitalRead(BUTTON3_PIN) == HIGH) {
+        feedingState = !feedingState;
+        servo1.write(feedingState ? 0 : 90);
+        Firebase.setString(firebaseData,
+          "/doan1/controller/feeding/state",
+          feedingState ? "ON" : "OFF");
+        lcdPrint("Mode: User", feedingState ? "FEEDING: ON" : "FEEDING: OFF");
+        vTaskDelay(pdMS_TO_TICKS(300));
+      }
+
+      // PUMP BUTTON
+      if (digitalRead(BUTTON5_PIN) == HIGH) {
+        pumpStateLocal = !pumpStateLocal;
+        digitalWrite(PUMP_PIN, pumpStateLocal);
+        Firebase.setString(firebaseData,
+          "/doan1/controller/drinking/state",
+          pumpStateLocal ? "ON" : "OFF");
+        lcdPrint("Mode: User", pumpStateLocal ? "PUMP: ON" : "PUMP: OFF");
+        vTaskDelay(pdMS_TO_TICKS(300));
+      }
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(200));
   }
 }
 
 // ================= SETUP =================
 void setup() {
   Serial.begin(115200);
+
   lcd.begin();
   lcd.backlight();
 
   pinMode(FAN_PIN, OUTPUT);
   pinMode(HEATER_PIN, OUTPUT);
   pinMode(PUMP_PIN, OUTPUT);
+
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
 
@@ -160,21 +273,19 @@ void setup() {
   servo1.attach(FEEDING_PIN);
   dht.begin();
 
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-  }
+  WiFi.begin("Nha xe C", "88888888");
+  while (WiFi.status() != WL_CONNECTED) delay(500);
 
   config.host = "https://doan1-c4eac-default-rtdb.firebaseio.com/";
-  config.signer.tokens.legacy_token = "YOUR_TOKEN";
+  config.signer.tokens.legacy_token = "O5y6r8IZpdEW5HLgVq4BGWNWqUHXMtfBqE35AYW1";
   Firebase.begin(&config, &auth);
-  Firebase.reconnectWiFi(true);
 
-  dhtQueue = xQueueCreate(5, sizeof(DHTData_t));
+  dhtQueue = xQueueCreate(1, sizeof(DHTData_t));
+  waterQueue = xQueueCreate(1, sizeof(WaterData_t));
 
   xTaskCreate(Task_DHT, "DHT", 2048, NULL, 2, NULL);
-  xTaskCreate(Task_Pump, "PUMP", 2048, NULL, 2, NULL);
-  xTaskCreate(Task_Main, "MAIN", 4096, NULL, 1, NULL);
+  xTaskCreate(Task_Ultrasonic, "US", 2048, NULL, 2, NULL);
+  xTaskCreate(Task_Control, "CTRL", 4096, NULL, 1, NULL);
 }
 
 void loop() {}
