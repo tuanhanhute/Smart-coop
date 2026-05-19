@@ -154,16 +154,18 @@ void Task_Main(void *pv) {
     StatePump = firebaseData.stringData();
 
     
-    if (xQueueReceive(dhtQueue, &sensor, portMAX_DELAY)) {
+    if (xQueueReceive(dhtQueue, &sensor, 0)) {
+      g_temperature = sensor.temp;
+      g_humidity = sensor.humi;
 
-      float temperature = sensor.temp;
-      float humidity = sensor.humi;
+      Firebase.setFloat(firebaseData, "/doan1/controller/temperature", g_temperature);
+      Firebase.setFloat(firebaseData, "/doan1/controller/humidity", g_humidity);
+      }
 
-      Firebase.setFloat(firebaseData, "/doan1/controller/temperature", temperature);
-      Firebase.setFloat(firebaseData, "/doan1/controller/humidity", humidity);
+        float temperature = g_temperature;
+        float humidity = g_humidity;
 
-      // ================= AUTO MODE =================
-      if (mode == "auto") {
+        if (mode == "auto") {
 
       
         if (temperature > 28 && fanState == LOW) {
