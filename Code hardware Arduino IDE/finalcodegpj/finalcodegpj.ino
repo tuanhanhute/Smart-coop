@@ -137,6 +137,7 @@ void Task_Main(void *pv) {
 
   for (;;) {
 
+    
     Firebase.getString(firebaseData, "/doan1/controller/mode/state");
     mode = firebaseData.stringData();
 
@@ -152,6 +153,7 @@ void Task_Main(void *pv) {
     Firebase.getString(firebaseData, "/doan1/controller/drinking/state");
     StatePump = firebaseData.stringData();
 
+    
     if (xQueueReceive(dhtQueue, &sensor, portMAX_DELAY)) {
 
       float temperature = sensor.temp;
@@ -163,118 +165,113 @@ void Task_Main(void *pv) {
       // ================= AUTO MODE =================
       if (mode == "auto") {
 
+      
         if (temperature > 28 && fanState == LOW) {
           digitalWrite(FAN_PIN, HIGH);
           fanState = HIGH;
           lcdShow("Mode: Auto", "FAN: ON");
-        } else if (temperature <= 28 && fanState == HIGH) {
+          Firebase.setString(firebaseData, "/doan1/controller/fan/state", "ON");
+        }
+        else if (temperature <= 28 && fanState == HIGH) {
           digitalWrite(FAN_PIN, LOW);
           fanState = LOW;
           lcdShow("Mode: Auto", "FAN: OFF");
+          Firebase.setString(firebaseData, "/doan1/controller/fan/state", "OFF");
         }
 
+      
         if (humidity > 70 && heaterState == LOW) {
           digitalWrite(HEATER_PIN, HIGH);
           heaterState = HIGH;
           lcdShow("Mode: Auto", "HEATER: ON");
-        } else if (humidity <= 70 && heaterState == HIGH) {
+          Firebase.setString(firebaseData, "/doan1/controller/heater/state", "ON");
+        }
+        else if (humidity <= 70 && heaterState == HIGH) {
           digitalWrite(HEATER_PIN, LOW);
           heaterState = LOW;
           lcdShow("Mode: Auto", "HEATER: OFF");
+          Firebase.setString(firebaseData, "/doan1/controller/heater/state", "OFF");
         }
 
+  
         if (State == "ON" && StateFeeding == LOW) {
           digitalWrite(FEEDING_PIN, HIGH);
           servo1.write(0);
           StateFeeding = HIGH;
           lcdShow("Mode: Auto", "FEEDING: ON");
-        } else if (State == "OFF" && StateFeeding == HIGH) {
+          Firebase.setString(firebaseData, "/doan1/controller/feeding/state", "ON");
+        }
+        else if (State == "OFF" && StateFeeding == HIGH) {
           digitalWrite(FEEDING_PIN, LOW);
           servo1.write(90);
           StateFeeding = LOW;
           lcdShow("Mode: Auto", "FEEDING: OFF");
+          Firebase.setString(firebaseData, "/doan1/controller/feeding/state", "OFF");
         }
 
-        checkWaterLevelAndPump();
+      
+        checkWaterLevelAndPump();   
       }
 
       // ================= USER MODE =================
       else if (mode == "user") {
 
-        // FAN 
+        
         if (fan == "ON" && fanState == LOW) {
           digitalWrite(FAN_PIN, HIGH);
           fanState = HIGH;
           lcdShow("Mode: User", "FAN: ON");
+          Firebase.setString(firebaseData, "/doan1/controller/fan/state", "ON");
         }
-        if (fan == "OFF" && fanState == HIGH) {
+        else if (fan == "OFF" && fanState == HIGH) {
           digitalWrite(FAN_PIN, LOW);
           fanState = LOW;
           lcdShow("Mode: User", "FAN: OFF");
+          Firebase.setString(firebaseData, "/doan1/controller/fan/state", "OFF");
         }
 
-        if (digitalRead(BUTTON1_PIN) == HIGH) {
-          fanState = !fanState;
-          digitalWrite(FAN_PIN, fanState);
-          Firebase.setString(firebaseData, "/doan1/controller/fan/state", fanState ? "ON" : "OFF");
-          lcdShow("Mode: User", fanState ? "FAN: ON" : "FAN: OFF");
-        }
-
-        // HEATER
+        
         if (heater == "ON" && heaterState == LOW) {
           digitalWrite(HEATER_PIN, HIGH);
           heaterState = HIGH;
           lcdShow("Mode: User", "HEATER: ON");
+          Firebase.setString(firebaseData, "/doan1/controller/heater/state", "ON");
         }
-        if (heater == "OFF" && heaterState == HIGH) {
+        else if (heater == "OFF" && heaterState == HIGH) {
           digitalWrite(HEATER_PIN, LOW);
           heaterState = LOW;
           lcdShow("Mode: User", "HEATER: OFF");
+          Firebase.setString(firebaseData, "/doan1/controller/heater/state", "OFF");
         }
 
-        if (digitalRead(BUTTON2_PIN) == HIGH) {
-          heaterState = !heaterState;
-          digitalWrite(HEATER_PIN, heaterState);
-          Firebase.setString(firebaseData, "/doan1/controller/heater/state", heaterState ? "ON" : "OFF");
-        }
-
-        // FEEDING
+        
         if (State == "ON" && StateFeeding == LOW) {
           digitalWrite(FEEDING_PIN, HIGH);
           servo1.write(0);
           StateFeeding = HIGH;
           lcdShow("Mode: User", "FEEDING: ON");
+          Firebase.setString(firebaseData, "/doan1/controller/feeding/state", "ON");
         }
-        if (State == "OFF" && StateFeeding == HIGH) {
+        else if (State == "OFF" && StateFeeding == HIGH) {
           digitalWrite(FEEDING_PIN, LOW);
           servo1.write(90);
           StateFeeding = LOW;
           lcdShow("Mode: User", "FEEDING: OFF");
+          Firebase.setString(firebaseData, "/doan1/controller/feeding/state", "OFF");
         }
 
-        if (digitalRead(BUTTON3_PIN) == HIGH) {
-          StateFeeding = !StateFeeding;
-          digitalWrite(FEEDING_PIN, StateFeeding);
-          servo1.write(StateFeeding ? 0 : 90);
-          Firebase.setString(firebaseData, "/doan1/controller/feeding/state", StateFeeding ? "ON" : "OFF");
-        }
-
-        // PUMP
+      
         if (StatePump == "ON" && StatePumping == LOW) {
           digitalWrite(PUMP_PIN, HIGH);
           StatePumping = HIGH;
           lcdShow("Mode: User", "PUMP: ON");
+          Firebase.setString(firebaseData, "/doan1/controller/drinking/state", "ON");
         }
-        if (StatePump == "OFF" && StatePumping == HIGH) {
+        else if (StatePump == "OFF" && StatePumping == HIGH) {
           digitalWrite(PUMP_PIN, LOW);
           StatePumping = LOW;
           lcdShow("Mode: User", "PUMP: OFF");
-        }
-
-        if (digitalRead(BUTTON5_PIN) == HIGH) {
-          StatePumping = !StatePumping;
-          digitalWrite(PUMP_PIN, StatePumping);
-          Firebase.setString(firebaseData, "/doan1/controller/drinking/state", StatePumping ? "ON" : "OFF");
+          Firebase.setString(firebaseData, "/doan1/controller/drinking/state", "OFF");
         }
       }
     }
@@ -282,7 +279,6 @@ void Task_Main(void *pv) {
     vTaskDelay(pdMS_TO_TICKS(100));
   }
 }
-
 // ================= SETUP =================
 void setup() {
   Serial.begin(115200);
